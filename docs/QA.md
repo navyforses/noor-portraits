@@ -4,7 +4,7 @@
 
 - TypeScript type check (`tsc --noEmit`).
 - Production Worker/client build.
-- 24 integration tests against the compiled application in an isolated Miniflare Workers runtime with actual D1 SQL migrations, private R2 and image-decoding WASM:
+- 34 integration tests against the compiled application in an isolated Miniflare Workers runtime with actual D1 SQL migrations, private R2 and image-decoding WASM:
   1. Catalog seeding.
   2. Administrative authorization and cross-origin mutation rejection.
   3. One-time admin bootstrap and password authentication.
@@ -45,3 +45,20 @@
 - Scheduled-handler logic is tested. Real hosted cron activation and a production execution log still require confirmation; deployment alone does not prove the timer is running.
 - Arabic is complete draft copy, not native-reviewed. Legal documents are editable drafts, not legally approved policies.
 - No formal penetration test or regulatory certification has been performed.
+
+## Conversion update — 2026-10-09
+
+34 tests passed against the updated compiled app. The original 24 checks remain, with upload consents now required before reference intake. Ten additional checks verify:
+
+- Mini package, editable price and server-owned EUR snapshot.
+- Public analytics cannot emit paid outcomes; admin costs/analytics require authentication.
+- No visitor attribution before optional measurement consent.
+- Duplicate event IDs are idempotent and arbitrary private fields are discarded.
+- Age, rights and AI consents precede uploads.
+- Concurrent/retried photo uploads do not create duplicate records.
+- Funnel attribution uses verified server outcomes; real sales remain zero.
+- Costs use order currency and validated minor-unit amounts.
+- Withdrawing consent deletes measurement attribution, preserving the operational order.
+- Measurement data retention deletes 30-day-old records.
+
+The public examples remain labeled synthetic adults. No actual customer before/after evidence, native Arabic review, live bank, AI API or email credentials have been supplied. New price is an editable EUR demo hypothesis, not a verified SAR equivalent. The unavailable control-browser skill prevents approved browser/real-device visual QA; no browser certification is claimed.

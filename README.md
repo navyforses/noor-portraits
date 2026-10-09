@@ -99,3 +99,17 @@ node tests/integration.mjs
 - https://api.bog.ge/docs/en/payments/introduction
 
 საჯარო paid-sales რეჟიმი არ არსებობს: მხოლოდ secret-ის დამატება არ ჩართავს რეალურ ჩამოჭრას. საჭიროა ზემოთ ჩამოთვლილი სამუშაოსა და ტესტების დასრულება.
+
+## Conversion-focused update
+
+- First Portrait: 3 portraits / 1 style, provisional €7 demo price. Original packages retained. Admin can edit or deactivate it. No SAR/AED conversion is implied.
+- Focused cinematic/profile entry offers; preselected package/style links skip repeated selection. Three stages: look/package, photos, review/payment. Legacy local drafts migrate to the new stages.
+- Optional preferences are collapsed; poster name/title appear for cinematic orders. WhatsApp is preserved in existing drafts but not requested on the first-purchase screen.
+- Age, photo rights and AI consent are enforced server-side before uploading. Original files up to 20 MB are resized in the browser; server remains limited to sanitized 8 MB / 4.2 MP. HEIC remains unsupported.
+- Per-photo real byte progress, separate failures/retries, and idempotent upload IDs. No synthetic generation progress.
+- Optional first-party measurement: explicit consent, one-day HttpOnly session cookie, 30-day pseudonymous record retention and withdrawal. No advertising pixels or private customer text. Sessions are not unique people; opt-out traffic is excluded.
+- Georgian-default Offers & funnel dashboard separates demo activity from real paid sales. Funnel is descriptive, not an active randomized price experiment. Commercial outcomes come only from the server.
+- Admin order cost ledger accepts actual generation, review, support, payment and other variable costs, grouped by transaction currency. Recorded costs may be incomplete; no profit claim.
+- New schema delta: drizzle/0001_last_mattie_franklin.sql. Existing orders/data are preserved.
+
+Still blocked: live payment approval/credentials and provider adapter, international cards/Apple Pay confirmation, reliable generation or operational manual fulfillment, email/domain, business details, native Arabic and legal review, actual hosted retention schedule verification. Authorized before/after evidence requires a real quality pilot and separate publication consent.
