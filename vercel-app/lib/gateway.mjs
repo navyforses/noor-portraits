@@ -1,4 +1,4 @@
-const BACKEND_HOST = 'noor-portrait-studio.navyforses.chatgpt.site';
+const BACKEND_HOST = 'noor-portraits-backend.jincharadzeshako.workers.dev';
 const ALLOWED_COOKIES = new Set(['noor_order', 'noor_admin', 'noor_measure']);
 const HEADERS = { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer' };
 const error = (code, status) => Response.json({ error: code }, { status, headers: HEADERS });
@@ -8,7 +8,7 @@ export function createGateway({ backendUrl, backendToken, fetcher = fetch }) {
   if (!backendUrl || !backendToken) return error('storage_unavailable', 503);
   let backend;
   try { backend = new URL(backendUrl); } catch { return error('storage_unavailable', 503); }
-  if (backend.protocol !== 'https:' || backend.hostname !== BACKEND_HOST || backend.username || backend.password || backend.pathname !== '/' || backend.search || backend.hash) return error('storage_unavailable', 503);
+  if (backend.protocol !== 'https:' || backend.hostname !== BACKEND_HOST || backend.port || backend.username || backend.password || backend.pathname !== '/' || backend.search || backend.hash) return error('storage_unavailable', 503);
   const incoming = new URL(request.url);
   if (!incoming.pathname.startsWith('/api/') || /%2f|%5c|\\/i.test(incoming.pathname)) return error('invalid', 400);
   if (incoming.pathname === '/api/maintenance' || incoming.pathname.startsWith('/api/maintenance/')) return error('unauthorized', 403);
@@ -16,7 +16,7 @@ export function createGateway({ backendUrl, backendToken, fetcher = fetch }) {
   if (request.method !== 'GET' && request.headers.get('origin') !== incoming.origin) return error('unauthorized', 403);
   if (Number(request.headers.get('content-length') || 0) > 4_000_000) return error('photo_invalid', 413);
   const target = new URL(incoming.pathname + incoming.search, backend.origin);
-  const headers = new Headers({ 'OAI-Sites-Authorization': `Bearer ${backendToken}` });
+  const headers = new Headers({ 'X-NOOR-Gateway-Token': backendToken });
   for (const key of ['content-type', 'x-upload-id']) {
    const value = request.headers.get(key); if (value) headers.set(key, value);
   }

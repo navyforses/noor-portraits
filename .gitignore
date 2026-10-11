@@ -51,3 +51,4 @@ next-env.d.ts
 !.env.example
 !/vercel-app/.env.example
 .dev.vars*
+/tsconfig.tsbuildinfo
