@@ -51,3 +51,11 @@ test('upload request limit matches the Vercel gateway boundary',async()=>{
  const gateway=createGateway(base);
  assert.equal((await gateway(req('/api/orders/test/upload',{method:'POST',headers:{origin:'https://noor.example','content-length':'4000001'},body:'x'}))).status,413);
 });
+test('relative links and malformed JSON fail safely without leaking upstream details',async()=>{
+ const relative=await createGateway({...base,fetcher:async()=>Response.json({link:'/ka/access#token'})})(req());
+ assert.equal(relative.status,200);assert.equal((await relative.json()).link,'/ka/access#token');
+ const foreign=await createGateway({...base,fetcher:async()=>Response.json({link:'https://other.example/x'})})(req());
+ assert.equal((await foreign.json()).link,'https://other.example/x');
+ const broken=await createGateway({...base,fetcher:async()=>new Response('{not json',{headers:{'content-type':'application/json'}})})(req());
+ assert.equal(broken.status,503);assert.deepEqual(await broken.json(),{error:'storage_unavailable'});
+});

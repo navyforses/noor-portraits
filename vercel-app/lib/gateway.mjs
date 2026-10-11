@@ -47,8 +47,9 @@ export function createGateway({ backendUrl, backendToken, fetcher = fetch }) {
     if (ALLOWED_COOKIES.has(value.split('=')[0])) outgoing.append('set-cookie', value);
    }
    if (response.headers.get('content-type')?.includes('application/json')) {
-    const data = await response.json();
-    if (typeof data.link === 'string') {
+    let data;
+    try { data = await response.json(); } catch { return error('storage_unavailable', 503); }
+    if (data && typeof data.link === 'string' && URL.canParse(data.link)) {
      const link = new URL(data.link);
      if (link.origin === backend.origin) data.link = incoming.origin + link.pathname + link.search + link.hash;
     }

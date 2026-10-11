@@ -21,6 +21,15 @@ The original application still uses demo payment, manual AI fulfillment and disc
 
 ## Checks
 
-`npm test`, `npm run typecheck`, `npm run build`
+`npm test`, `npm run typecheck`, `npm run build` — the same checks run in GitHub Actions (`.github/workflows/vercel-app.yml`) on every change under `vercel-app/`, together with `npm audit` for production dependencies.
 
 Gateway tests use synthetic credentials and requests, never production customer data.
+
+## Launch checklist (owner actions)
+
+Code-side work for the Vercel storefront is complete. The remaining steps need the owner's accounts and decisions:
+
+1. Create the Vercel project from this repository with Root Directory `vercel-app` (Framework: Next.js).
+2. Approve and add `NOOR_BACKEND_URL` and `NOOR_BACKEND_TOKEN` as encrypted server-only environment variables, then redeploy.
+3. Verify on the deployment: `/api/catalog` returns data (not 503), a demo order completes, and `/ka/admin` login works.
+4. Keep Vercel Authentication enabled until the production blockers in the root `README.md` (payment provider, AI provider, email, domain, legal review, native Arabic review) are resolved.
