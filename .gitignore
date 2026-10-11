@@ -15,6 +15,10 @@
 
 # next.js
 /.next/
+/vercel-app/.next/
+/vercel-app/node_modules/
+/vercel-app/*.tsbuildinfo
+/vercel-app/.vercel/
 /.vinext/
 /out/
 
@@ -45,4 +49,5 @@ next-env.d.ts
 /outputs/
 /work/
 !.env.example
+!/vercel-app/.env.example
 .dev.vars*

@@ -1,0 +1,18 @@
+'use client';
+import {useEffect,useState} from 'react';
+import {Ctx,api,packageLabel} from './studio';
+import {money} from '../lib/config';
+
+export default function OfferAnalytics({x}:{x:Ctx}){
+ const {t,l,c,notify}=x;const [data,setData]=useState<any>();
+ useEffect(()=>{api('admin/analytics').then(setData).catch(e=>notify(e.message))},[]);
+ if(!data)return <p>{t.loading}</p>;
+ return <><p className="notice">{t.analyticsScope}</p><div className="metrics"><div className="surface"><small>{t.liveSales}</small><strong>{data.livePaid}</strong></div><div className="surface"><small>{t.visits}</small><strong>{data.sessions.reduce((n:number,s:any)=>n+s.visits,0)}</strong></div></div><h2>{t.campaign}</h2><p>{t.analyticsConsentBias}</p><div className="table-wrap"><table><thead><tr>{['campaign','visits','formStarted','uploadSets','buyers','conversion'].map(k=><th key={k}>{(t as any)[k]}</th>)}</tr></thead><tbody>{data.sessions.map((s:any)=><tr key={s.campaign+s.mode}><td>{s.campaign==='cinematic'?t.posterLook:s.campaign==='profile'?t.profileLook:t.organic}</td><td>{s.visits}</td><td>{s.started}</td><td>{s.uploaded}</td><td>{s.buyers}</td><td>{s.visits?new Intl.NumberFormat(l,{style:'percent',maximumFractionDigits:1}).format(s.buyers/s.visits):'—'}</td></tr>)}</tbody></table>{!data.sessions.length&&<p>{t.empty}</p>}</div><h2>{t.packages}</h2><p className="notice">{t.costWarning}</p><div className="table-wrap"><table><thead><tr>{['packages','currency','orderCount','verifiedSales','refunds','recordedCosts','costCoverage'].map(k=><th key={k}>{(t as any)[k]}</th>)}</tr></thead><tbody>{data.offers.map((o:any)=><tr key={o.package_id+o.currency+o.provider}><td>{packageLabel(c.packages.find((p:any)=>p.id===o.package_id)||{id:o.package_id,name:o.package_id},t)}</td><td dir="ltr">{o.currency}</td><td>{o.paid}</td><td>{money(o.sales,o.currency,l)}</td><td>{money(o.refunds,o.currency,l)}</td><td>{money(o.costs,o.currency,l)}</td><td>{o.costed} / {o.paid}</td></tr>)}</tbody></table>{!data.offers.length&&<p>{t.empty}</p>}</div></>
+}
+
+export function OrderCosts({x,order}:{x:Ctx;order:any}){
+ const {t,l,notify}=x;const [rows,setRows]=useState<any[]>([]),[amount,setAmount]=useState(''),[kind,setKind]=useState('manual'),[busy,setBusy]=useState(false);
+ const load=()=>api('admin/costs?order='+order.id).then(setRows).catch(e=>notify(e.message));useEffect(()=>{load()},[order.id]);
+ async function save(removeId?:string){setBusy(true);try{await api('admin/costs',{orderId:order.id,...removeId?{removeId}:{kind,amount:Math.round(Number(amount)*100)}});setAmount('');await load()}catch(e:any){notify(e.message)}finally{setBusy(false)}}
+ return <section className="surface cost-panel"><h3>{t.recordedCosts}</h3><p>{t.costWarning}</p><form className="cost-form" onSubmit={e=>{e.preventDefault();save()}}><label>{t.costKind}<select value={kind} onChange={e=>setKind(e.target.value)}>{['generation','manual','support','payment','other'].map(k=><option key={k} value={k}>{(t as any)['cost_'+k]}</option>)}</select></label><label>{t.costAmount} · {order.snapshot.currency}<input required type="number" min="0.01" max="100000" step="0.01" inputMode="decimal" value={amount} onChange={e=>setAmount(e.target.value)}/></label><button className="button" disabled={busy}>{t.addCost}</button></form>{!rows.length?<p>{t.costEmpty}</p>:<><strong>{money(rows.reduce((n,r)=>n+r.amount,0),order.snapshot.currency,l)}</strong><div className="cost-list">{rows.map(r=><div key={r.id}><span>{(t as any)['cost_'+r.kind]}</span><b dir="ltr">{money(r.amount,r.currency,l)}</b><button className="text-button" disabled={busy} onClick={()=>save(r.id)}>{t.remove}</button></div>)}</div></>}</section>
+}

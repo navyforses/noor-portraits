@@ -1,0 +1,6 @@
+export type Locale='ar'|'en'|'ka';
+export const locales:Locale[]=['ar','en','ka'];
+export const defaultPackages=[{id:'mini',name:'First Portrait',count:3,styles:1,amount:700,currency:'EUR',active:true},{id:'starter',name:'Starter',count:5,styles:1,amount:1900,currency:'EUR',active:true},{id:'plus',name:'Plus',count:10,styles:2,amount:2900,currency:'EUR',active:true},{id:'premium',name:'Premium',count:20,styles:3,amount:4900,currency:'EUR',active:true}];
+export const defaultStyles=[{id:'cinematic',active:true,image:'/portraits/cinematic.webp'},{id:'studio',active:true,image:'/portraits/studio.webp'},{id:'fantasy',active:true,image:'/portraits/fantasy.webp'}];
+export const defaultSettings={brand:'NOOR',tagline:'PORTRAITS',deliveryNote:{ar:'يُؤكَّد موعد التسليم بعد مراجعة الطلب.',en:'Delivery timing is confirmed after order review.',ka:'მიწოდების ვადა დასტურდება შეკვეთის განხილვის შემდეგ.'},unpaidHours:24,referenceDays:7,resultDays:30,revisions:1,supportEmail:'',companyName:'',registration:'',address:'',paymentProvider:'mock',manualCost:null};
+export function money(amount:number,currency:string,locale:string){return new Intl.NumberFormat(locale==='ka'?'ka-GE':locale==='ar'?'ar-SA':'en-GB',{style:'currency',currency,maximumFractionDigits:2}).format(amount/100)}
