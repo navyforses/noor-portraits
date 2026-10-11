@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {createGateway} from '../lib/gateway.mjs';
-const backendUrl='https://noor-portrait-studio.navyforses.chatgpt.site';
+const backendUrl='https://noor-portraits-backend.jincharadzeshako.workers.dev';
 const base={backendUrl,backendToken:'test-only-not-a-real-credential'};
 const req=(path='/api/catalog', options={})=>new Request('https://noor.example'+path,options);
 
@@ -11,7 +11,7 @@ test('missing credentials fail closed without calling the upstream',async()=>{
  assert.equal(response.status,503); assert.equal(called,false);
 });
 test('only the selected HTTPS backend can receive credentials',async()=>{
- for(const url of ['https://attacker.example','http://noor-portrait-studio.navyforses.chatgpt.site','https://user:pass@noor-portrait-studio.navyforses.chatgpt.site','https://noor-portrait-studio.navyforses.chatgpt.site/other']){
+ for(const url of ['https://noor-portrait-studio.navyforses.chatgpt.site','https://noor-portraits-backend.jincharadzeshako.workers.dev:8443','https://attacker.example','http://noor-portraits-backend.jincharadzeshako.workers.dev','https://user:pass@noor-portraits-backend.jincharadzeshako.workers.dev','https://noor-portraits-backend.jincharadzeshako.workers.dev/other']){
   const response=await createGateway({...base,backendUrl:url})(req());assert.equal(response.status,503);
  }
 });
@@ -24,13 +24,13 @@ test('cross-origin writes and privileged maintenance are blocked',async()=>{
 test('credentials stay server-side and only NOOR cookies are forwarded',async()=>{
  const gateway=createGateway({...base,fetcher:async(url,options)=>{
   assert.equal(url.origin,backendUrl);
-  assert.equal(options.headers.get('OAI-Sites-Authorization'),'Bearer '+base.backendToken);
+  assert.equal(options.headers.get('X-NOOR-Gateway-Token'),base.backendToken);
   assert.equal(options.headers.get('cookie'),'noor_order=customer-session; noor_measure=consent-session');
   assert.equal(options.headers.get('authorization'),null);
-  return Response.json({mode:'demo'},{headers:{'OAI-Sites-Authorization':'should-never-leak','Set-Cookie':'unrelated=private'}});
+  return Response.json({mode:'demo'},{headers:{'X-NOOR-Gateway-Token':'should-never-leak','Set-Cookie':'unrelated=private'}});
  }});
- const response=await gateway(req('/api/catalog',{headers:{cookie:'vercel_secret=private; noor_order=customer-session; noor_measure=consent-session',authorization:'Bearer browser-value'}}));
- assert.equal(response.headers.get('OAI-Sites-Authorization'),null);assert.equal(response.headers.get('set-cookie'),null);
+ const response=await gateway(req('/api/catalog',{headers:{cookie:'vercel_secret=private; noor_order=customer-session; noor_measure=consent-session',authorization:'Bearer browser-value','X-NOOR-Gateway-Token':'browser-value'}}));
+ assert.equal(response.headers.get('X-NOOR-Gateway-Token'),null);assert.equal(response.headers.get('set-cookie'),null);
  assert.equal(response.headers.get('cache-control'),'no-store');assert.deepEqual(await response.json(),{mode:'demo'});
 });
 test('same-origin writes preserve body, session cookies and deployment-local links',async()=>{
