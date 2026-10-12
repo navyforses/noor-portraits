@@ -1,3 +1,5 @@
+> 2026-10-12: the active workflow is `.github/workflows/cloudflare-backend.yml` (checks plus deploy from `main` when `CLOUDFLARE_API_TOKEN` is set). This proposal is kept for reference only.
+
 # Proposed backend CI
 
 `cloudflare-backend.proposed.yml` is a plain proposal, not an active GitHub Actions workflow. The owner will review and install it manually if desired. This pull request does not change `.github/workflows/` or request additional GitHub OAuth permissions.
