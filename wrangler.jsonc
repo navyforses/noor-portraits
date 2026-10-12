@@ -20,5 +20,9 @@
     "binding": "BUCKET",
     "bucket_name": "noor-portraits-private",
     "jurisdiction": "eu"
-  }]
+  }],
+  "durable_objects": {
+    "bindings": [{ "name": "GENERATION_RUNNER", "class_name": "GenerationRunner" }]
+  },
+  "migrations": [{ "tag": "v1-generation-runner", "new_sqlite_classes": ["GenerationRunner"] }]
 }

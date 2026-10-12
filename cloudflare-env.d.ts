@@ -14,5 +14,6 @@ declare namespace Cloudflare {
     RESEND_API_KEY?: string;
     OPENAI_API_KEY?: string;
     OPENAI_IMAGE_MODEL?: string;
+    GENERATION_RUNNER?: DurableObjectNamespace<import("./lib/server/runner").GenerationRunner>;
   }
 }

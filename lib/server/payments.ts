@@ -2,6 +2,7 @@ import {one, run, id, audit, config} from './store';
 import {recordOrderEvent} from './analytics';
 import {sendOrderEmail} from './email';
 import {bankReceipt, type BankStatus} from './bog';
+import {kickRunner} from './runner';
 
 /** Called exactly once per order, right after its payment becomes verified. */
 export async function onPaid(orderId: string) {
@@ -20,6 +21,8 @@ export async function queueGeneration(orderId: string) {
   await run("INSERT INTO generation_jobs (id,order_id,status,attempts,error,updated_at) VALUES (?,?,?,?,?,?) ON CONFLICT(order_id) DO UPDATE SET status='queued',attempts=0,error=NULL,updated_at=excluded.updated_at WHERE generation_jobs.status!='running'", id(), orderId, 'queued', 0, null, Date.now());
   await run('UPDATE orders SET generation_status=? WHERE id=?', 'queued', orderId);
   await audit('system', 'generation_queued', orderId);
+  // Start the background runner right away; the cron heartbeat retries if this call fails.
+  await kickRunner();
 }
 
 /**
