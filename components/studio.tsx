@@ -10,7 +10,7 @@ export const packageLabel=(p:any,t:Dictionary)=>p.id==='mini'&&p.name==='First P
 export function Status({value,t}:{value:string,t:Dictionary}){return <span className={'status s-'+value}>{(t.statuses as any)[value]||value}</span>}
 export default function Studio({locale,path}:{locale:string,path:string[]}){
  const l=locale as Locale,router=useRouter();const [c,setC]=useState<any>({packages:defaultPackages,styles:defaultStyles,settings:defaultSettings,content:{},mode:'demo'}),[menu,setMenu]=useState(false),[toast,setToast]=useState('');
- const t={...dictionaries[l]};for(const [k,v] of Object.entries(c.content||{}))if((v as any)[l])(t as any)[k]=(v as any)[l];
+ const t={...dictionaries[l]};for(const [k,v] of Object.entries(c.content||{}))if((v as any)[l])(t as any)[k]=(v as any)[l];const openai=c.settings.aiProvider==='openai';t.ai=t.ai.replace('{provider}',openai?'OpenAI':'Google');t.privacyBody=t.privacyBody.replace('{aiProcessing}',openai?t.aiProcessingOpenai:t.aiProcessingGoogle);
  const reload=async()=>{setC(await api('catalog'))};useEffect(()=>{reload().catch(()=>setToast('error'));document.documentElement.lang=l;document.documentElement.dir=l==='ar'?'rtl':'ltr'},[l]);
  useEffect(()=>{if(toast){const tm=setTimeout(()=>setToast(''),6500);return()=>clearTimeout(tm)}},[toast]);
  const go=(p:string)=>{setMenu(false);router.push('/'+l+(p.startsWith('/')?p:'/'+p))};const x:Ctx={l,t,c,go,reload,notify:setToast};const route=path[0]||'home';

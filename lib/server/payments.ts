@@ -8,7 +8,7 @@ export async function onPaid(orderId: string) {
   const s = await config();
   const o = await one('SELECT * FROM orders WHERE id=?', orderId);
   if (!o) return;
-  if (s.aiProvider === 'gemini') {
+  if (s.aiProvider === 'gemini' || s.aiProvider === 'openai') {
     await queueGeneration(orderId);
   } else {
     await run('UPDATE orders SET generation_status=? WHERE id=?', 'manual_required', orderId);
