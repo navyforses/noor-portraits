@@ -68,7 +68,7 @@
   "original": "Your original text is preserved. Poster lettering is added separately during review.",
   "adult": "I am at least 18 years old.",
   "rights": "These are my photos, or the depicted adult has authorized their use.",
-  "ai": "I consent to AI processing of these photos, including their transfer to our AI provider (Google) to create my portraits.",
+  "ai": "I consent to AI processing of these photos, including their transfer to our AI provider ({provider}) to create my portraits.",
   "accept": "I accept the service terms.",
   "marketing": "Send me occasional studio news (optional).",
   "pay": "Continue to demo checkout",
@@ -105,7 +105,7 @@
   "supportMissing": "Support contact is not configured. This is a demo; paid sales are disabled.",
   "policyDraft": "Draft policy · Legal review required before launch",
   "termsBody": "Adults only. Submit authorized photos of one adult. Portraits are AI-assisted; exact resemblance is not guaranteed. No celebrity impersonation, protected character designs, or illegal content. Your original names and titles remain unchanged. Test prices are provisional. The seller identity, address, tax details, governing law and final delivery terms must be completed before paid sales.",
-  "privacyBody": "Photos are stored privately and are accessible only through authorized sessions. We record order details and consent timestamps. Image metadata is removed during processing. We do not use customer photos for marketing or training without separate permission. Deletion removes active storage copies; infrastructure backups may follow separate retention. To create portraits, photos are sent to our AI provider (Google Gemini API, paid tier: not used to train models; kept up to 55 days only for abuse monitoring). Order emails are sent through our email provider (Resend). Retention cleanup runs hourly when its schedule is active; expired files are blocked immediately. Optional first-party measurement uses a one-day session cookie and retains pseudonymous visit/step data for 30 days. You can decline or withdraw in Measurement preferences. Operational order records remain separate.",
+  "privacyBody": "Photos are stored privately and are accessible only through authorized sessions. We record order details and consent timestamps. Image metadata is removed during processing. We do not use customer photos for marketing or training without separate permission. Deletion removes active storage copies; infrastructure backups may follow separate retention. {aiProcessing} Retention cleanup runs hourly when its schedule is active; expired files are blocked immediately. Optional first-party measurement uses a one-day session cookie and retains pseudonymous visit/step data for 30 days. You can decline or withdraw in Measurement preferences. Operational order records remain separate.",
   "refundBody": "One revision request is included initially for poor resemblance, visible defects, or a wrong style. Generation failures are routed to manual fulfillment or refund review. Refund eligibility depends on the circumstances and applicable consumer law. No blanket exclusion applies to all digital products. Approved refunds are returned to the original payment method. Final jurisdiction-specific terms need legal review.",
   "retention": "Retention: unpaid uploads {u} hours; references {r} days after delivery; results {g} days after delivery.",
   "login": "Administrator sign in",
@@ -369,5 +369,7 @@
   "audit_email_failed": "Email failed",
   "audit_refund_requested_bank": "Refund sent to bank",
   "audit_bank_refunded": "Bank confirmed refund",
-  "syncPayment": "Check payment at bank"
+  "syncPayment": "Check payment at bank",
+  "aiProcessingGoogle": "To create portraits, photos are sent to our AI provider (Google Gemini API, paid tier: not used to train models; kept up to 55 days only for abuse monitoring). Order emails are sent through our email provider (Resend).",
+  "aiProcessingOpenai": "To create portraits, photos are sent to our AI provider (OpenAI API: not used to train models; kept up to 30 days only for abuse monitoring). Order emails are sent through our email provider (Resend)."
 }

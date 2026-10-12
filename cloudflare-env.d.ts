@@ -12,5 +12,7 @@ declare namespace Cloudflare {
     GEMINI_API_KEY?: string;
     GEMINI_MODEL?: string;
     RESEND_API_KEY?: string;
+    OPENAI_API_KEY?: string;
+    OPENAI_IMAGE_MODEL?: string;
   }
 }

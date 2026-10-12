@@ -1,17 +1,18 @@
 import {imageSize} from 'image-size';
 import {one, all, run, id, audit, config, bucket, db} from './store';
 import {generatePortrait, geminiConfigured, buildPrompt, toBase64, GenerationRejected} from './gemini';
+import {generatePortraitOpenAI, openaiConfigured} from './openai';
 import {sanitizeImage} from './images';
 import {recordOrderEvent} from './analytics';
 import {sendOrderEmail, alertOwner} from './email';
 
-const IMAGE_TIMEOUT = 90_000;      // one generation call
-const START_MARGIN = 100_000;      // never start a call that could outlive the invocation
+const IMAGE_TIMEOUT = 150_000;     // one generation call (OpenAI documents up to 2 minutes)
+const START_MARGIN = 160_000;      // never start a call that could outlive the invocation
 const STALE_AFTER = 5 * 60_000;    // a running job without a heartbeat for this long is reclaimed
 const MAX_FAILURES = 5;            // failed calls per job before the order is escalated
 
 /**
- * Durable job runner. Without the gemini AI provider (or its secret) jobs escalate to manual fulfilment
+ * Durable job runner. Without an AI provider (gemini or openai) and its secret, jobs escalate to manual fulfilment
  * with zero API calls. With it, each job generates the order's portraits one by one, records every image
  * immediately (so a crash never repeats a finished image), and delivers automatically when complete.
  * Called from the per-minute cron with a long deadline and after POST requests with a short one;
@@ -21,7 +22,7 @@ export async function runJobs(deadline = Date.now() + 20_000) {
   const s = await config();
   await run("UPDATE generation_jobs SET status='queued' WHERE status='running' AND updated_at<?", Date.now() - STALE_AFTER);
   const jobs = await all("SELECT j.*,o.payment_status FROM generation_jobs j JOIN orders o ON o.id=j.order_id WHERE j.status='queued' ORDER BY j.updated_at ASC LIMIT 3");
-  const live = s.aiProvider === 'gemini' && geminiConfigured();
+  const live = (s.aiProvider === 'gemini' && geminiConfigured()) || (s.aiProvider === 'openai' && openaiConfigured());
   await Promise.all(jobs.map(async j => {
     if (j.payment_status !== 'verified') {
       await run('UPDATE generation_jobs SET status=?,error=? WHERE id=?', 'failed', 'paymentRequired', j.id);
@@ -38,7 +39,7 @@ export async function runJobs(deadline = Date.now() + 20_000) {
     const claim = await run("UPDATE generation_jobs SET status='running',updated_at=? WHERE id=? AND status='queued'", Date.now(), j.id);
     if (!claim.meta.changes) return;
     try {
-      const finished = await generateOrder(j.order_id, j.id, deadline);
+      const finished = await generateOrder(j.order_id, j.id, deadline, s.aiProvider);
       if (!finished) await run("UPDATE generation_jobs SET status='queued',updated_at=? WHERE id=? AND status='running'", Date.now(), j.id);
     } catch (e: any) {
       await recordFailure(j.id, j.order_id, e);
@@ -57,7 +58,7 @@ async function recordFailure(jobId: string, orderId: string, e: any) {
   }
 }
 
-async function generateOrder(orderId: string, jobId: string, deadline: number) {
+async function generateOrder(orderId: string, jobId: string, deadline: number, provider: string) {
   const o = await one('SELECT * FROM orders WHERE id=?', orderId);
   if (!o || o.payment_status !== 'verified' || o.deleted_at || ['refund_pending', 'refunded'].includes(o.status)) {
     await run("UPDATE generation_jobs SET status='failed',error='orderUnavailable' WHERE id=?", jobId);
@@ -87,7 +88,10 @@ async function generateOrder(orderId: string, jobId: string, deadline: number) {
     if (deadline - Date.now() < START_MARGIN) return false;
     const style = styles[done % styles.length];
     try {
-      const out = await generatePortrait({references, prompt: buildPrompt({style, index: Math.floor(done / styles.length), preferences, revisionReason: reason}), timeoutMs: IMAGE_TIMEOUT});
+      const prompt = buildPrompt({style, index: Math.floor(done / styles.length), preferences, revisionReason: reason});
+      const out = provider === 'openai'
+        ? await generatePortraitOpenAI({references, prompt, timeoutMs: IMAGE_TIMEOUT, user: 'order-' + orderId.slice(0, 8)})
+        : await generatePortrait({references, prompt, timeoutMs: IMAGE_TIMEOUT});
       await storeResult(orderId, count, out.bytes, out.mimeType);
       await run('UPDATE generation_jobs SET updated_at=? WHERE id=?', Date.now(), jobId);
     } catch (e: any) {
