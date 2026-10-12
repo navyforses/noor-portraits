@@ -1,15 +1,144 @@
-import {one,all,run,id,audit} from './store';import {ManualGenerationProvider,ImageGenerationProvider} from './providers';
-/** Durable job runner. No AI credentials means immediate human escalation, zero API calls/costs.
- * Any future live provider must honor the stable job idempotencyKey before this is enabled. */
-export async function runJobs(provider:ImageGenerationProvider=new ManualGenerationProvider()){
- const jobs=await all("SELECT j.*,o.payment_status FROM generation_jobs j JOIN orders o ON o.id=j.order_id WHERE j.status='queued' AND j.attempts<3 LIMIT 3");
- for(const j of jobs){if(j.payment_status!=='verified'){await run('UPDATE generation_jobs SET status=?,error=? WHERE id=?','failed','paymentRequired',j.id);continue}
- const claim=await run("UPDATE generation_jobs SET status='running',attempts=attempts+1,updated_at=? WHERE id=? AND status='queued'",Date.now(),j.id);if(!claim.meta.changes)continue;
- const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),20000);
- try{if(provider instanceof ManualGenerationProvider)throw Error('ai_unavailable');
- // Live provider transport and polling are intentionally not enabled in this MVP.
- throw Error('provider_unavailable');
- }catch(e:any){const manual=e.message==='ai_unavailable'||e.message==='provider_unavailable';await run('UPDATE generation_jobs SET status=?,error=?,updated_at=? WHERE id=?',manual?'manual_required':'failed',manual?e.message:'error',Date.now(),j.id);await run('UPDATE orders SET status=?,generation_status=? WHERE id=?',manual?'paid':'failed',manual?'manual_required':'failed',j.order_id);await audit('system',manual?'generation_unavailable':'generation_failed',j.order_id)}finally{clearTimeout(timer)}
- }
- // Never automatically retry a timed-out chargeable call; reconcile the provider's idempotency key first.
+import {imageSize} from 'image-size';
+import {one, all, run, id, audit, config, bucket, db} from './store';
+import {generatePortrait, geminiConfigured, buildPrompt, toBase64, GenerationRejected} from './gemini';
+import {sanitizeImage} from './images';
+import {recordOrderEvent} from './analytics';
+import {sendOrderEmail, alertOwner} from './email';
+
+const IMAGE_TIMEOUT = 90_000;      // one generation call
+const START_MARGIN = 100_000;      // never start a call that could outlive the invocation
+const STALE_AFTER = 5 * 60_000;    // a running job without a heartbeat for this long is reclaimed
+const MAX_FAILURES = 5;            // failed calls per job before the order is escalated
+
+/**
+ * Durable job runner. Without the gemini AI provider (or its secret) jobs escalate to manual fulfilment
+ * with zero API calls. With it, each job generates the order's portraits one by one, records every image
+ * immediately (so a crash never repeats a finished image), and delivers automatically when complete.
+ * Called from the per-minute cron with a long deadline and after POST requests with a short one;
+ * a short deadline only escalates and never starts a chargeable call.
+ */
+export async function runJobs(deadline = Date.now() + 20_000) {
+  const s = await config();
+  await run("UPDATE generation_jobs SET status='queued' WHERE status='running' AND updated_at<?", Date.now() - STALE_AFTER);
+  const jobs = await all("SELECT j.*,o.payment_status FROM generation_jobs j JOIN orders o ON o.id=j.order_id WHERE j.status='queued' ORDER BY j.updated_at ASC LIMIT 3");
+  const live = s.aiProvider === 'gemini' && geminiConfigured();
+  await Promise.all(jobs.map(async j => {
+    if (j.payment_status !== 'verified') {
+      await run('UPDATE generation_jobs SET status=?,error=? WHERE id=?', 'failed', 'paymentRequired', j.id);
+      return;
+    }
+    if (!live) {
+      const claim = await run("UPDATE generation_jobs SET status='manual_required',error='ai_unavailable',updated_at=? WHERE id=? AND status='queued'", Date.now(), j.id);
+      if (!claim.meta.changes) return;
+      await run('UPDATE orders SET generation_status=? WHERE id=?', 'manual_required', j.order_id);
+      await audit('system', 'generation_unavailable', j.order_id);
+      return;
+    }
+    if (deadline - Date.now() < START_MARGIN) return;
+    const claim = await run("UPDATE generation_jobs SET status='running',updated_at=? WHERE id=? AND status='queued'", Date.now(), j.id);
+    if (!claim.meta.changes) return;
+    try {
+      const finished = await generateOrder(j.order_id, j.id, deadline);
+      if (!finished) await run("UPDATE generation_jobs SET status='queued',updated_at=? WHERE id=? AND status='running'", Date.now(), j.id);
+    } catch (e: any) {
+      await recordFailure(j.id, j.order_id, e);
+    }
+  }));
+}
+
+async function recordFailure(jobId: string, orderId: string, e: any) {
+  const code = String(e?.message || 'error').slice(0, 60);
+  await run("UPDATE generation_jobs SET attempts=attempts+1,error=?,status=CASE WHEN attempts+1>=? THEN 'failed' ELSE 'queued' END,updated_at=? WHERE id=?", code, MAX_FAILURES, Date.now(), jobId);
+  const job = await one('SELECT * FROM generation_jobs WHERE id=?', jobId);
+  if (job?.status === 'failed') {
+    await run("UPDATE orders SET status='failed',generation_status='failed' WHERE id=? AND status IN ('paid','processing','revision_requested')", orderId);
+    await audit('system', 'generation_failed', orderId);
+    await alertOwner(orderId, 'automatic generation failed');
+  }
+}
+
+async function generateOrder(orderId: string, jobId: string, deadline: number) {
+  const o = await one('SELECT * FROM orders WHERE id=?', orderId);
+  if (!o || o.payment_status !== 'verified' || o.deleted_at || ['refund_pending', 'refunded'].includes(o.status)) {
+    await run("UPDATE generation_jobs SET status='failed',error='orderUnavailable' WHERE id=?", jobId);
+    return true;
+  }
+  const count = JSON.parse(o.snapshot).count as number;
+  const styles = (await all('SELECT style_id FROM order_items WHERE order_id=? ORDER BY rowid', orderId)).map(r => r.style_id as string);
+  if (!styles.length) throw Error('noStyles');
+  const preferences = JSON.parse(o.preferences || '{}');
+  // Previously delivered (approved) results stay visible until a revised set is complete.
+  const revision = (await one('SELECT COUNT(*) AS n FROM generated_assets WHERE order_id=? AND approved=1', orderId)).n > 0;
+  const reason = revision ? (await one("SELECT reason FROM revision_requests WHERE order_id=? AND status='requested' ORDER BY created_at DESC LIMIT 1", orderId))?.reason : undefined;
+  await run("UPDATE orders SET status='processing',generation_status='running' WHERE id=? AND status IN ('paid','revision_requested','failed')", orderId);
+
+  const uploads = await all('SELECT storage_key FROM uploads WHERE order_id=? ORDER BY created_at ASC LIMIT 4', orderId);
+  if (!uploads.length) throw Error('noReferences');
+  const references: string[] = [];
+  for (const u of uploads) {
+    const obj = await bucket().get(u.storage_key);
+    if (obj) references.push(toBase64(new Uint8Array(await obj.arrayBuffer())));
+  }
+  if (!references.length) throw Error('noReferences');
+
+  while (true) {
+    const done = (await one('SELECT COUNT(*) AS n FROM generated_assets WHERE order_id=? AND approved=0', orderId)).n as number;
+    if (done >= count) break;
+    if (deadline - Date.now() < START_MARGIN) return false;
+    const style = styles[done % styles.length];
+    try {
+      const out = await generatePortrait({references, prompt: buildPrompt({style, index: Math.floor(done / styles.length), preferences, revisionReason: reason}), timeoutMs: IMAGE_TIMEOUT});
+      await storeResult(orderId, count, out.bytes, out.mimeType);
+      await run('UPDATE generation_jobs SET updated_at=? WHERE id=?', Date.now(), jobId);
+    } catch (e: any) {
+      if (e instanceof GenerationRejected || /^ai_error_|^Timeout|abort/i.test(String(e?.name) + String(e?.message))) {
+        await recordFailure(jobId, orderId, e);
+        const job = await one('SELECT status FROM generation_jobs WHERE id=?', jobId);
+        if (job?.status === 'failed') return true;
+        await run("UPDATE generation_jobs SET status='running',updated_at=? WHERE id=?", Date.now(), jobId);
+        continue;
+      }
+      throw e;
+    }
+  }
+  await deliver(orderId, jobId, revision);
+  return true;
+}
+
+async function storeResult(orderId: string, count: number, bytes: Uint8Array, mimeType: string) {
+  let out = {bytes, width: 0, height: 0, size: bytes.length};
+  const head = imageSize(bytes);
+  if (head.type === 'jpg' && head.width && head.height && bytes.length <= 20 * 1024 * 1024) {
+    out = {bytes, width: head.width, height: head.height, size: bytes.length};
+  } else {
+    // Anything other than a JPEG is re-encoded so every stored file is a clean JPEG.
+    out = sanitizeImage(bytes);
+  }
+  const fid = id(), key = `results/${orderId}/${fid}.jpg`;
+  await bucket().put(key, out.bytes, {httpMetadata: {contentType: 'image/jpeg'}});
+  const saved = await run('INSERT INTO generated_assets (id,order_id,storage_key,size,width,height,created_at) SELECT ?,?,?,?,?,?,? WHERE (SELECT COUNT(*) FROM generated_assets WHERE order_id=? AND approved=0)<?', fid, orderId, key, out.size, out.width, out.height, Date.now(), orderId, count);
+  if (!saved.meta.changes) await bucket().delete(key);
+  void mimeType;
+}
+
+async function deliver(orderId: string, jobId: string, revision: boolean) {
+  if (revision) {
+    const old = await all('SELECT * FROM generated_assets WHERE order_id=? AND approved=1', orderId);
+    for (const f of old) {
+      await bucket().delete(f.storage_key);
+      await run('DELETE FROM generated_assets WHERE id=?', f.id);
+    }
+  }
+  const now = Date.now();
+  await db().batch([
+    db().prepare('UPDATE generated_assets SET approved=1 WHERE order_id=?').bind(orderId),
+    db().prepare("UPDATE orders SET status='ready',generation_status='approved',delivered_at=? WHERE id=?").bind(now, orderId),
+    db().prepare("UPDATE revision_requests SET status='resolved' WHERE order_id=? AND status='requested'").bind(orderId),
+    db().prepare("UPDATE generation_jobs SET status='done',error=NULL,updated_at=? WHERE id=?").bind(now, jobId),
+  ]);
+  await audit('system', 'generation_completed', orderId);
+  await audit('system', 'auto_delivered', orderId);
+  const o = await one('SELECT * FROM orders WHERE id=?', orderId);
+  await recordOrderEvent('order_ready', o);
+  await sendOrderEmail(o, 'ready');
 }

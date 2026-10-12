@@ -59,3 +59,21 @@ test('relative links and malformed JSON fail safely without leaking upstream det
  const broken=await createGateway({...base,fetcher:async()=>new Response('{not json',{headers:{'content-type':'application/json'}})})(req());
  assert.equal(broken.status,503);assert.deepEqual(await broken.json(),{error:'storage_unavailable'});
 });
+test('bank callback is accepted without Origin, forwards only its signature and no cookies',async()=>{
+ const gateway=createGateway({...base,fetcher:async(url,options)=>{
+  assert.equal(url.pathname,'/api/payments/bog/callback');
+  assert.equal(options.headers.get('callback-signature'),'c2lnbmF0dXJl');
+  assert.equal(options.headers.get('cookie'),null);
+  assert.equal(options.headers.get('x-upload-id'),null);
+  assert.equal(new TextDecoder().decode(options.body),'{"event":"order_payment"}');
+  return Response.json({ok:true});
+ }});
+ const response=await gateway(req('/api/payments/bog/callback',{method:'POST',headers:{'content-type':'application/json','callback-signature':'c2lnbmF0dXJl',cookie:'noor_admin=admin-session','x-upload-id':'x'},body:'{"event":"order_payment"}'}));
+ assert.equal(response.status,200);
+});
+test('the callback exception covers only that exact path',async()=>{
+ const gateway=createGateway({...base,fetcher:async()=>{throw Error('must not be called')}});
+ for(const path of ['/api/payments/bog/callback?x=1','/api/payments/bog/callback/','/api/payments/bog','/api/orders']){
+  assert.equal((await gateway(req(path,{method:'POST',body:'{}'}))).status,403);
+ }
+});
