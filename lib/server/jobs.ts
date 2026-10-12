@@ -15,8 +15,8 @@ const MAX_FAILURES = 5;            // failed calls per job before the order is e
  * Durable job runner. Without an AI provider (gemini or openai) and its secret, jobs escalate to manual fulfilment
  * with zero API calls. With it, each job generates the order's portraits one by one, records every image
  * immediately (so a crash never repeats a finished image), and delivers automatically when complete.
- * Called from the per-minute cron with a long deadline and after POST requests with a short one;
- * a short deadline only escalates and never starts a chargeable call.
+ * Called from the generation runner (lib/server/runner.ts, a Durable Object alarm) with a long deadline
+ * and after POST requests with a short one; a short deadline only escalates and never starts a chargeable call.
  */
 export async function runJobs(deadline = Date.now() + 20_000) {
   const s = await config();
@@ -47,9 +47,18 @@ export async function runJobs(deadline = Date.now() + 20_000) {
   }));
 }
 
-async function recordFailure(jobId: string, orderId: string, e: any) {
+/** True when generation work is waiting to be picked up (used by the runner to schedule another pass). */
+export async function pendingJobs() {
+  return ((await one("SELECT COUNT(*) AS n FROM generation_jobs WHERE status='queued'"))?.n || 0) > 0;
+}
+
+/**
+ * Counts a failed call. A job that will be retried in the same invocation stays 'running', so another
+ * runner cannot claim it in between; otherwise it goes back to 'queued' for the next pass.
+ */
+async function recordFailure(jobId: string, orderId: string, e: any, retryingNow = false) {
   const code = String(e?.message || 'error').slice(0, 60);
-  await run("UPDATE generation_jobs SET attempts=attempts+1,error=?,status=CASE WHEN attempts+1>=? THEN 'failed' ELSE 'queued' END,updated_at=? WHERE id=?", code, MAX_FAILURES, Date.now(), jobId);
+  await run("UPDATE generation_jobs SET attempts=attempts+1,error=?,status=CASE WHEN attempts+1>=? THEN 'failed' ELSE ? END,updated_at=? WHERE id=?", code, MAX_FAILURES, retryingNow ? 'running' : 'queued', Date.now(), jobId);
   const job = await one('SELECT * FROM generation_jobs WHERE id=?', jobId);
   if (job?.status === 'failed') {
     await run("UPDATE orders SET status='failed',generation_status='failed' WHERE id=? AND status IN ('paid','processing','revision_requested')", orderId);
@@ -96,10 +105,9 @@ async function generateOrder(orderId: string, jobId: string, deadline: number, p
       await run('UPDATE generation_jobs SET updated_at=? WHERE id=?', Date.now(), jobId);
     } catch (e: any) {
       if (e instanceof GenerationRejected || /^ai_error_|^Timeout|abort/i.test(String(e?.name) + String(e?.message))) {
-        await recordFailure(jobId, orderId, e);
+        await recordFailure(jobId, orderId, e, true);
         const job = await one('SELECT status FROM generation_jobs WHERE id=?', jobId);
         if (job?.status === 'failed') return true;
-        await run("UPDATE generation_jobs SET status='running',updated_at=? WHERE id=?", Date.now(), jobId);
         continue;
       }
       throw e;
