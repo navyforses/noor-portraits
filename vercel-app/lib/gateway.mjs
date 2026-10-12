@@ -1,5 +1,8 @@
 const BACKEND_HOST = 'noor-portraits-backend.jincharadzeshako.workers.dev';
 const ALLOWED_COOKIES = new Set(['noor_order', 'noor_admin', 'noor_measure']);
+// Bank of Georgia calls this server-to-server without an Origin header. The backend never trusts the body:
+// it only reads the bank order id and re-checks the status with the bank's authenticated API.
+const BANK_CALLBACK = '/api/payments/bog/callback';
 const HEADERS = { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer' };
 const error = (code, status) => Response.json({ error: code }, { status, headers: HEADERS });
 
@@ -13,15 +16,16 @@ export function createGateway({ backendUrl, backendToken, fetcher = fetch }) {
   if (!incoming.pathname.startsWith('/api/') || /%2f|%5c|\\/i.test(incoming.pathname)) return error('invalid', 400);
   if (incoming.pathname === '/api/maintenance' || incoming.pathname.startsWith('/api/maintenance/')) return error('unauthorized', 403);
   if (!['GET', 'POST'].includes(request.method)) return error('invalid', 405);
-  if (request.method !== 'GET' && request.headers.get('origin') !== incoming.origin) return error('unauthorized', 403);
+  const bankCallback = request.method === 'POST' && incoming.pathname === BANK_CALLBACK && !incoming.search;
+  if (request.method !== 'GET' && !bankCallback && request.headers.get('origin') !== incoming.origin) return error('unauthorized', 403);
   if (Number(request.headers.get('content-length') || 0) > 4_000_000) return error('photo_invalid', 413);
   const target = new URL(incoming.pathname + incoming.search, backend.origin);
   const headers = new Headers({ 'X-NOOR-Gateway-Token': backendToken });
-  for (const key of ['content-type', 'x-upload-id']) {
+  for (const key of bankCallback ? ['content-type', 'callback-signature'] : ['content-type', 'x-upload-id']) {
    const value = request.headers.get(key); if (value) headers.set(key, value);
   }
   const cookies = (request.headers.get('cookie') || '').split(';').map(x => x.trim()).filter(x => ALLOWED_COOKIES.has(x.split('=')[0]));
-  if (cookies.length) headers.set('cookie', cookies.join('; '));
+  if (cookies.length && !bankCallback) headers.set('cookie', cookies.join('; '));
   if (request.method !== 'GET') headers.set('origin', backend.origin);
   let body;
   if (request.method !== 'GET') {

@@ -14,7 +14,11 @@ function authorized(request: Request, env: Cloudflare.Env) {
 
 export default {
   async scheduled(event: ScheduledController, _env: Cloudflare.Env, ctx: ExecutionContext) {
-    ctx.waitUntil(Promise.all([cleanup(), runJobs()]).then(() => {
+    // "* * * * *" drives portrait generation (long deadline, under the 15-minute cron wall-clock limit).
+    // The hourly trigger (and manual test triggers) also run retention cleanup.
+    const minutely = event.cron === "* * * * *";
+    const work = minutely ? runJobs(Date.now() + 13 * 60_000) : Promise.all([cleanup(), runJobs()]);
+    ctx.waitUntil(work.then(() => {
       console.log(JSON.stringify({ event: "noor_scheduled_complete", cron: event.cron, scheduledTime: event.scheduledTime }));
     }));
   },
