@@ -1,0 +1,68 @@
+name: cloudflare-backend
+
+# Checks the Cloudflare Worker backend on every change and deploys it from main.
+# Deployment needs the repository secret CLOUDFLARE_API_TOKEN (template "Edit Cloudflare Workers").
+# Without it the deploy job only prints a notice. Runtime secrets (BOG_*, OPENAI_API_KEY, RESEND_API_KEY, ...)
+# stay in Cloudflare and are never touched here. D1 migrations are not applied automatically.
+on:
+  push:
+    branches: [main]
+    paths-ignore: ['vercel-app/**', 'docs/**', '**/*.md']
+  pull_request:
+    paths-ignore: ['vercel-app/**', 'docs/**', '**/*.md']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cloudflare-backend-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+      - run: npm install --global pnpm@11.25.0
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm build
+        env:
+          WRANGLER_SEND_METRICS: 'false'
+      - run: node tests/integration.mjs
+
+  deploy:
+    needs: check
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 414a50c18fa76da1f07ea9d3b62af7bc
+      WRANGLER_SEND_METRICS: 'false'
+    steps:
+      - name: Skip when the deploy token is not configured
+        if: env.CLOUDFLARE_API_TOKEN == ''
+        run: echo "::notice::CLOUDFLARE_API_TOKEN is not set; the backend was checked but not deployed."
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        if: env.CLOUDFLARE_API_TOKEN != ''
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        if: env.CLOUDFLARE_API_TOKEN != ''
+        with:
+          node-version: 22
+      - if: env.CLOUDFLARE_API_TOKEN != ''
+        run: npm install --global pnpm@11.25.0
+      - if: env.CLOUDFLARE_API_TOKEN != ''
+        run: pnpm install --frozen-lockfile
+      - if: env.CLOUDFLARE_API_TOKEN != ''
+        run: pnpm build
+      # "pnpm deploy" is a built-in pnpm command; the package script must be called with "run".
+      - if: env.CLOUDFLARE_API_TOKEN != ''
+        run: pnpm run deploy

@@ -25,7 +25,7 @@
    - `RESEND_API_KEY`.
 
    მნიშვნელობები ჩატში, კოდში ან დოკუმენტში არასდროს ჩაწერო.
-3. **Backend-ის განახლება.** შეცვლილი კოდი Cloudflare-ზე ავტომატურად არ ავა. შერწყმის (merge) შემდეგ საჭიროა `pnpm install --frozen-lockfile && pnpm build && pnpm deploy`, Cloudflare-ში შესული ანგარიშით. ალტერნატივაა `docs/ci/cloudflare-backend.proposed.yml`-ის დაყენება deploy ნაბიჯით.
+3. **Backend-ის განახლება.** `.github/workflows/cloudflare-backend.yml` ყოველ ცვლილებაზე ამოწმებს backend-ს და `main`-იდან ავტომატურად ანახლებს Cloudflare-ზე, თუ GitHub-ში დამატებულია საიდუმლო `CLOUDFLARE_API_TOKEN` (Cloudflare → My Profile → API Tokens → Create Token → შაბლონი „Edit Cloudflare Workers“). ტოკენის გარეშე მხოლოდ შემოწმება ხდება. ხელით განახლება: `pnpm install --frozen-lockfile && pnpm build && pnpm run deploy` (არა `pnpm deploy`: ეს pnpm-ის ჩაშენებული ბრძანებაა). D1 მიგრაციები ავტომატურად არ სრულდება.
 4. **Resend.** დაამატე დომენი `mynoor.art` და DNS ჩანაწერები ჩასვი Vercel-ის DNS-ში. დომენზე გამორთე ბმულებზე დაწკაპუნების თვალთვალი (click tracking). გამგზავნი იქნება მაგალითად `NOOR Portraits <orders@mynoor.art>`.
 5. **პანელის პარამეტრები** (`/ka/admin`, Settings). შეავსე:
    - გამყიდველის სახელი, საიდენტიფიკაციო ნომერი, მისამართი და მხარდაჭერის ელფოსტა;
