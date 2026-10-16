@@ -2,6 +2,7 @@ import {one, run, id, audit, config} from './store';
 import {recordOrderEvent} from './analytics';
 import {sendOrderEmail} from './email';
 import {bankReceipt, type BankStatus} from './bog';
+import {flittReceipt, type FlittStatus} from './flitt';
 import {kickRunner} from './runner';
 
 /** Called exactly once per order, right after its payment becomes verified. */
@@ -29,7 +30,7 @@ export async function queueGeneration(orderId: string) {
  * Applies an authoritative bank status to our records. Amount, currency and order must match the
  * stored snapshot exactly before an order is marked paid. Safe to call repeatedly (callbacks, return page, retries).
  */
-export async function applyBankStatus(payment: any, r: {status: BankStatus; amount: number; currency: string}) {
+export async function applyBankStatus(payment: any, r: {status: BankStatus | FlittStatus; amount: number; currency: string}) {
   const o = await one('SELECT * FROM orders WHERE id=?', payment.order_id);
   if (!o) return 'missing';
   if (r.status === 'verified') {
@@ -70,6 +71,14 @@ export async function syncBankPayment(payment: any) {
   if (!payment || payment.provider !== 'bog') return payment?.status || 'pending';
   const receipt = await bankReceipt(payment.reference);
   if (receipt.orderId && receipt.orderId !== payment.reference) return 'mismatch';
+  return applyBankStatus(payment, receipt);
+}
+
+/** Re-reads the Flitt receipt and applies it. Used by the callback, the return page and the admin. */
+export async function syncFlittPayment(payment: any) {
+  if (!payment || payment.provider !== 'flitt') return payment?.status || 'pending';
+  const receipt = await flittReceipt(payment.reference);
+  if (receipt.orderId && !receipt.orderId.includes(payment.order_id)) return 'mismatch';
   return applyBankStatus(payment, receipt);
 }
 

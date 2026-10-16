@@ -3,6 +3,7 @@ import {env} from 'cloudflare:workers';
 /**
  * Bank of Georgia online payments (https://api.bog.ge/docs/en/payments/introduction).
  * Credentials come only from Cloudflare secrets: BOG_CLIENT_ID, BOG_CLIENT_SECRET and BOG_ENV ("sandbox" or "production").
+ * For Arabic users, the payment page language is set to 'en' because BOG has no Arabic locale.
  * Missing or invalid configuration fails closed with provider_unavailable; no payment is attempted.
  */
 const HOSTS = {
@@ -74,6 +75,10 @@ export async function createBankOrder(o: {orderId: string; amount: number; curre
   const site = new URL(o.siteUrl);
   if (site.protocol !== 'https:') throw Error('provider_unavailable');
   const base = site.origin;
+  
+  // For Arabic users, pass 'en' as the payment page language (BOG has no Arabic)
+  const paymentLocale = o.locale === 'ar' ? 'en' : (o.locale === 'ka' ? 'ka' : 'en');
+  
   const body = {
     callback_url: base + '/api/payments/bog/callback',
     external_order_id: 'NOOR-' + o.orderId,
@@ -92,7 +97,7 @@ export async function createBankOrder(o: {orderId: string; amount: number; curre
   const r = await call('/payments/v1/ecommerce/orders', {
     method: 'POST',
     body: JSON.stringify(body),
-    headers: {'Accept-Language': o.locale === 'ka' ? 'ka' : 'en'},
+    headers: {'Accept-Language': paymentLocale},
     idempotencyKey: crypto.randomUUID(),
   });
   const redirect = r?._links?.redirect?.href;

@@ -63,6 +63,13 @@ export function buildPrompt(o: {style: string; index: number; preferences: Recor
 
 export class GenerationRejected extends Error {}
 
+const MAX_RETRIES = 3;
+const RETRY_DELAYS = [2000, 4000, 8000];
+
+async function sleep(ms: number) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 /** One image per call. References must be JPEG bytes; at most 4 are sent (the model's limit for one person). */
 export async function generatePortrait(input: {references: string[]; prompt: string; timeoutMs: number}) {
   const key = (env as any).GEMINI_API_KEY;
@@ -72,18 +79,62 @@ export async function generatePortrait(input: {references: string[]; prompt: str
     contents: [{role: 'user', parts: [{text: input.prompt}, ...input.references.slice(0, 4).map(data => ({inline_data: {mime_type: 'image/jpeg', data}}))]}],
     generationConfig: {responseModalities: ['IMAGE'], imageConfig: {aspectRatio: '4:5', imageSize: '2K'}},
   };
-  const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
-    method: 'POST',
-    headers: {'x-goog-api-key': key, 'Content-Type': 'application/json'},
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(input.timeoutMs),
-  });
-  if (r.status === 400 || r.status === 403) throw new GenerationRejected('ai_rejected_' + r.status);
-  if (!r.ok) throw Error('ai_error_' + r.status);
-  const b: any = await r.json();
-  const parts: any[] = b?.candidates?.[0]?.content?.parts || [];
-  const image = parts.find(p => p?.inlineData?.data || p?.inline_data?.data);
-  if (!image) throw new GenerationRejected('ai_no_image_' + clean(b?.candidates?.[0]?.finishReason || b?.promptFeedback?.blockReason || 'unknown', 40));
-  const data = image.inlineData || image.inline_data;
-  return {bytes: fromBase64(data.data), mimeType: String(data.mimeType || data.mime_type || 'image/jpeg')};
+  
+  let lastError: any;
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
+        method: 'POST',
+        headers: {'x-goog-api-key': key, 'Content-Type': 'application/json'},
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(input.timeoutMs),
+      });
+      
+      // Client errors (auth, bad request, forbidden) should not be retried
+      if (r.status === 400 || r.status === 401 || r.status === 403) {
+        let message = '';
+        try { const e: any = await r.json(); message = String(e?.error?.message || ''); } catch {}
+        throw new GenerationRejected('ai_rejected_' + r.status + (message ? ': ' + message : ''));
+      }
+      
+      // Rate limits and server errors can be retried
+      if ((r.status === 429 || r.status >= 500) && attempt < MAX_RETRIES) {
+        let message = '';
+        try { const e: any = await r.json(); message = String(e?.error?.message || ''); } catch {}
+        lastError = Error('ai_error_' + r.status + (message ? ': ' + message : ''));
+        await sleep(RETRY_DELAYS[attempt]);
+        continue;
+      }
+      
+      if (!r.ok) {
+        let message = '';
+        try { const e: any = await r.json(); message = String(e?.error?.message || ''); } catch {}
+        throw Error('ai_error_' + r.status + (message ? ': ' + message : ''));
+      }
+      
+      const b: any = await r.json();
+      const parts: any[] = b?.candidates?.[0]?.content?.parts || [];
+      const image = parts.find(p => p?.inlineData?.data || p?.inline_data?.data);
+      if (!image) {
+        const reason = clean(b?.candidates?.[0]?.finishReason || b?.promptFeedback?.blockReason || 'unknown', 40);
+        throw new GenerationRejected('ai_no_image_' + reason);
+      }
+      const data = image.inlineData || image.inline_data;
+      return {bytes: fromBase64(data.data), mimeType: String(data.mimeType || data.mime_type || 'image/jpeg')};
+    } catch (e: any) {
+      // Don't retry GenerationRejected errors
+      if (e instanceof GenerationRejected) throw e;
+      
+      // Network errors and timeouts can be retried
+      if (attempt < MAX_RETRIES && (/network|timeout|fetch/i.test(e.message) || e.name === 'AbortError')) {
+        lastError = e;
+        await sleep(RETRY_DELAYS[attempt]);
+        continue;
+      }
+      
+      throw e;
+    }
+  }
+  
+  throw lastError || Error('ai_error_unknown');
 }

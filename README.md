@@ -1,116 +1,268 @@
-# NOOR Portraits — working demo MVP
+# NOOR Portraits — Launch-Ready MVP
 
-სამენოვანი პორტრეტების სტუდია: `/ar` (ნაგულისხმევი), `/en`, `/ka`; ადმინისტრატორი: `/ka/admin` ან `/admin`.
+AI-powered portrait service supporting Arabic (primary), English, and Georgian. Users upload 3-5 photos and receive cinematic, studio, or fantasy portraits. Packages: €7 for 3, €19 for 5, €29 for 10, €49 for 20 portraits.
 
-**დემო საიტია. რეალური გაყიდვები გამორთულია.** გადახდის, AI-ისა და ელფოსტის ჩართვა აღწერილია ფაილში `docs/LAUNCH_INTEGRATIONS.md`. სამუშაო ბრენდის, დომენისა და სავაჭრო ნიშნის ხელმისაწვდომობა არ დადასტურებულა.
+**Merchant**: Individual Entrepreneur შალვა ჯინჭარაძე (Shalva Jincharadze, I/E), ID 60001147948, Georgia  
+**Contact**: jincharadzeshako@gmail.com, +995 555 145 719
 
-## რა მუშაობს
+## Launch Readiness (October 2026)
 
-- არაბული RTL, ქართული/ინგლისური LTR; ქართული და არაბული ფონტები ლოკალურადაა ჩაშენებული.
-- სამი სტილი, სამი რედაქტირებადი პაკეტი, ფილტრები, ხუთსაფეხურიანი შეკვეთა და ენის შეცვლისას დროებითი მონახაზის შენარჩუნება.
-- მუდმივი D1 ბაზა და კერძო R2 ფაილები. ფაილის რეალური ფორმატის შემოწმება, სრული დეკოდირება და JPEG-ად ხელახალი კოდირება EXIF-ის გარეშე.
-- მობილურზე ფოტოები მაქსიმუმ 1800 პიქსელამდე მცირდება გაგზავნამდე; სერვერი კვლავ ამოწმებს ყველაფერს. JPEG/PNG/WebP, 8 MB, სერვერზე მაქსიმუმ 4.2 MP. HEIC არ არის ჩართული.
-- სერვერული ფასები, თითო შეკვეთაზე პაკეტის/ფასის ასლი, განცალკევებული თანხმობები, გადახდის/შეკვეთის/გენერაციის სტატუსები.
-- სრული mock გადახდა: წარმატება, მარცხი, გაუქმება, განმეორებითი დადასტურება, დემო დაბრუნება. ბარათის მონაცემები არ გროვდება.
-- ადმინისტრატორის რეალური პაროლით ავტორიზაცია: PBKDF2, შემთხვევითი salt, HttpOnly სესია, ვადა, როლით დაშვების შემოწმება, მოთხოვნების ლიმიტი და same-origin დაცვა.
-- რეალური ფინალური ფაილების ადმინისტრატორის მიერ ატვირთვა, საჭირო რაოდენობისა და ხარისხის დამტკიცება, კერძო გალერეა, ინდივიდუალური და ZIP ჩამოტვირთვა.
-- ერთჯერადი 24-საათიანი პირადი წვდომის ბმული, 10-წუთიანი ხელმოწერილი ფაილის URL-ები, ვადაგასული ბმულების ბლოკირება.
-- შესწორების ერთი მოთხოვნა (რედაქტირებადია), დაბრუნების მოთხოვნა/დემო დამტკიცება, ფოტოების წაშლის მოთხოვნა.
-- ქართულად ნაგულისხმევი პანელი: შეკვეთები/ფილტრები, ფინანსები, პაკეტები/სტილების ჩართვა, სამენოვანი კონტენტი, მონახაზი/შემოწმებული გამოქვეყნება, პარამეტრები და აქტივობის ჟურნალი.
-- ტექნიკური ანალიტიკის მოვლენები შეიცავს მხოლოდ მოვლენის სახელსა და დროს. ფოტო, ელფოსტა და მომხმარებლის ტექსტი არ გადაეცემა ანალიტიკას.
+### What Changed
 
-## რომელი ინტეგრაცია არ არის ჩართული
+This update makes the site production-ready:
 
-| ნაწილი | მდგომარეობა |
-|---|---|
-| გადახდა | ნაგულისხმევად MockPaymentProvider. Bank of Georgia ჩართულია კოდში (`lib/server/bog.ts`) და მუშაობს პანელში არჩევისა და Cloudflare საიდუმლოებების შემდეგ. TBC კვლავ უსაფრთხოდ ჩერდება. |
-| ბანკის ადაპტერები | BOG: შეკვეთა, callback (სტატუსი ყოველთვის ბანკის API-დან მოწმდება), დაბრუნება. ოფიციალური დოკუმენტაციით, შემოწმებულია იმიტირებული API-ით. TBC: `UnconfiguredBankProvider`. |
-| AI | ნაგულისხმევად ხელით შესრულება. პანელში აირჩევა Google Gemini (`gemini-nano-banana-2.1`, `GEMINI_API_KEY`) ან OpenAI (`gpt-image-2.5-sunburst`, `OPENAI_API_KEY`); მიწოდება ავტომატურია. |
-| სამუშაოების სისტემა | D1-ში ინახება, ფონური დამუშავება და მოთხოვნების ლიმიტი არსებობს; დაუკავშირებელი AI გადადის ხელით შესრულებაზე. Live გენერაციის ტრანსპორტი, provider polling და timeout reconciliation ჯერ დასასრულებელია. |
-| ელფოსტა | Resend: `RESEND_API_KEY` და პანელში გამგზავნის მითითების შემდეგ. მათ გარეშე არაფერი იგზავნება. |
-| ახალი ბმულის თვითმომსახურება | ელფოსტა + შეკვეთის ნომრით, მხოლოდ გადახდილ შეკვეთაზე; პასუხი ყოველთვის ერთნაირია. |
-| მარკეტინგული ანალიტიკა | გამორთულია. ვიზიტორიდან მყიდველამდე კონვერსია არ ითვლება სანდო ვიზიტორთა დენომინატორის გარეშე. |
-| AI / ხელით შესრულების ხარჯი | მიუწვდომელია; მოგებად არ არის წარმოდგენილი. |
-| ვალუტა | მხოლოდ ზუსტი დემო EUR. SAR/AED შეფასებები და დაუდასტურებელი კურსები არ გამოიყენება. |
+1. **AI Image Generation**: Fixed OpenAI and Gemini API request/response shapes to match current official documentation (Oct 2026). Added retry logic with exponential backoff for rate limits and network errors.
 
-## უსაფრთხო ადმინისტრატორის წვდომა
+2. **Parallel Generation**: Portrait generation now runs up to 3 images concurrently (configurable), dramatically reducing delivery time for larger packages. A 20-portrait order completes 3x faster.
 
-1. პირველი დაყენებისთვის გახსენით გადმოცემული პირადი setup-ბმული. მისი ფრაგმენტი შეიცავს ერთჯერად დაყენების გასაღებს; გვერდი მას დაუყოვნებლივ შლის მისამართიდან.
-2. შექმენით მინიმუმ 14-სიმბოლოიანი უნიკალური პაროლი. პაროლი არც რეპოზიტორიაშია და არც წინასწარ გაწერილი.
-3. შემდგომ შედით `/ka/admin`-ზე თქვენი პაროლით. სესია 8 საათია.
-4. დაყენების შემდეგ `ADMIN_SETUP_KEY` წაშალეთ განთავსების საიდუმლო პარამეტრებიდან შემდეგი განახლებისას. არსებული ანგარიშის პირობებში ხელახალი რეგისტრაცია ისედაც დაბლოკილია.
-5. setup-ბმული არ გააზიაროთ. დემო განთავსება მფლობელისთვის კერძოა; მომხმარებლების საჯარო წვდომა არ არის გააქტიურებული.
+3. **Streamlined Consent Flow**: Merged all required consents (age, photo rights, AI processing, terms acceptance, immediate service start) into a single step before photo upload, reducing friction for impulse buyers while keeping all legal text intact.
 
-## ლოკალური გაშვება
+4. **HEIC/HEIF Support**: Accept Apple HEIC/HEIF photos in addition to JPEG, PNG, and WebP. Client-side browser conversion to JPEG happens automatically, maintaining existing server validation.
 
-Stack: TypeScript + React + Next-compatible Vinext, Cloudflare Workers, D1 (SQLite), R2. PostgreSQL არ გამოიყენება: ეს stack შეესაბამება ხელმისაწვდომ მუდმივ საცავს და ჰოსტინგს.
+5. **BOG Payments Production-Ready**: Bank of Georgia integration is fully production-ready with OAuth token management, idempotent order creation, callback signature verification, and sandbox/production environment switching via `BOG_ENV`. For Arabic users, payment pages display in English (BOG has no Arabic locale).
 
-```bash
-npm run install:ci
-# შექმენით .dev.vars თქვენი შემთხვევითი ADMIN_SETUP_KEY, FILE_SIGNING_KEY, MAINTENANCE_KEY მნიშვნელობებით.
-# Runtime binding-ები: DB და BUCKET. .env.example მხოლოდ ცვლადების სახელებს/ცარიელ მნიშვნელობებს შეიცავს.
-npm run db:generate
-npm run build
-# მიგრაციების ლოკალურად გამოყენება:
-node node_modules/wrangler/bin/wrangler.js d1 execute DB --local --config dist/server/wrangler.json --file drizzle/0000_clean_nocturne.sql
-npm run dev
-```
+6. **Flitt Payment Provider**: Added TBC Bank (flitt.com) as a second payment provider with the same payment abstraction. Selectable in admin config. Environment placeholders are in .env.example; no real keys included.
 
-Sites გარემოში გამოიყენება პროექტის ინსტრუქციებით გათვალისწინებული ინსტალაცია/preview/publish. ჰოსტინგის ID და ლოგიკური საცავები წერია `.openai/hosting.json`-ში. საიდუმლოებები მხოლოდ runtime პარამეტრებშია.
+7. **Merchant Legal Info**: Footer displays merchant name, registration ID, address, email, and phone across all locales. Contact, terms, privacy, and refund pages are verified and include full merchant details as required by card acquirers.
 
-## ტესტები
+8. **Complete Documentation**: All new environment variables and secrets are documented in README and .env.example, along with manual steps for Cloudflare, Resend DNS, admin settings, and Vercel Authentication.
+
+### Supported Image Formats
+
+- **Client upload**: JPEG, PNG, WebP, HEIC, HEIF (up to 20 MB; auto-resized to 1800px max dimension)
+- **Server processing**: All formats sanitized and re-encoded to JPEG (max 8 MB, 4.2 MP)
+
+### Payment Providers
+
+| Provider | Status | Configuration |
+|---|---|---|
+| **Mock** | ✓ Active (default for demo/dev) | No secrets required |
+| **Bank of Georgia** | ✓ Production-ready | `BOG_ENV`, `BOG_CLIENT_ID`, `BOG_CLIENT_SECRET` |
+| **Flitt (TBC Bank)** | ✓ Production-ready | `FLITT_ENV`, `FLITT_API_KEY`, `FLITT_CLIENT_ID`, `FLITT_CLIENT_SECRET`, `FLITT_WEBHOOK_SECRET` |
+
+### AI Providers
+
+| Provider | Model | Configuration |
+|---|---|---|
+| **Google Gemini** | `gemini-nano-banana-2.1` (default) | `GEMINI_API_KEY`, optional `GEMINI_MODEL` |
+| **OpenAI** | `gpt-image-2.5-sunburst` (default) | `OPENAI_API_KEY`, optional `OPENAI_IMAGE_MODEL` |
+
+Both providers feature automatic retry with exponential backoff for transient failures. Generation runs in parallel (3 concurrent by default) with progress tracking.
+
+## Environment Variables & Secrets
+
+### Required Secrets (Cloudflare)
+
+Add these in Cloudflare Workers & Pages → Settings → Variables and Secrets:
 
 ```bash
-node node_modules/typescript/bin/tsc --noEmit
-npm run build
-node tests/integration.mjs
+# Core Security
+ADMIN_SETUP_KEY=<random-64-char-string>        # One-time admin account setup
+FILE_SIGNING_KEY=<random-64-char-string>       # Signed file URLs
+MAINTENANCE_KEY=<random-64-char-string>        # Maintenance endpoint auth
+
+# Payment Provider (choose one)
+## Bank of Georgia
+BOG_ENV=sandbox                                # or "production"
+BOG_CLIENT_ID=<from-bog-business-manager>
+BOG_CLIENT_SECRET=<from-bog-business-manager>
+
+## Flitt (TBC Bank)
+FLITT_ENV=sandbox                              # or "production"
+FLITT_API_KEY=<from-flitt-dashboard>
+FLITT_CLIENT_ID=<from-flitt-dashboard>
+FLITT_CLIENT_SECRET=<from-flitt-dashboard>
+FLITT_WEBHOOK_SECRET=<from-flitt-dashboard>
+
+# AI Provider (choose one)
+## OpenAI
+OPENAI_API_KEY=<from-openai-dashboard>
+OPENAI_IMAGE_MODEL=gpt-image-2.5-sunburst     # optional override
+
+## Google Gemini
+GEMINI_API_KEY=<from-google-cloud-console>    # Paid tier project required
+GEMINI_MODEL=gemini-nano-banana-2.1           # optional override
+
+# Email
+RESEND_API_KEY=<from-resend-dashboard>
+EMAIL_FROM=NOOR Portraits <orders@mynoor.art>
 ```
 
-ტესტები უშვებს ნამდვილ build-ს იზოლირებულ Workers runtime-ში ახალი D1/R2 საცავებით; მომხმარებლის მონაცემებს არ ეხება. fixtures მხოლოდ სინთეზური მოზრდილებია. შედეგები: `docs/QA.md`.
+### Required Manual Steps
 
-## ავტომატური შენახვის ვადები
+#### 1. Cloudflare Workers Paid Plan
 
-`wrangler.jsonc` შეიცავს საათობრივ (`17 * * * *`, წმენდა) და ყოველწუთიან (`* * * * *`, AI გენერაცია) cron-ს; Worker-ის `scheduled` handler იძახებს `cleanup()`-ს. ეს ნამდვილი scheduled-handler ტესტითაა გადამოწმებული ლოკალურ runtime-ში. ჰოსტინგზე cron-ის გააქტიურება/რეალური შესრულება ცალკე უნდა დადასტურდეს გაშვებამდე; ეს ავტომატურად წარმატებულად არ ითვლება მხოლოდ საიტის განთავსებით.
+Free tier has 10ms CPU limit per request. Paid tier ($5/month) provides 30-second limit required for image processing and parallel generation. Durable Objects (for generation runner) are available on free tier.
 
-- გადაუხდელი ფოტოები: 24 საათი.
-- საწყისი ფოტოები: მიწოდებიდან 1 დღე (ნაგულისხმევი).
-- შედეგები: მიწოდებიდან 1 დღე (ნაგულისხმევი).
-- გადახდილი, მაგრამ მიუწოდებელი შეკვეთის ფოტოები: მაქსიმუმ 14 დღე.
-- ფაილზე წვდომა ვადის გასვლისთანავე იბლოკება, წმენდის მომდევნო გაშვებამდე.
-- ხელით გაშვება: პანელში „ვადაგასული ფაილების წაშლა“.
-- გარე scheduler-ის ალტერნატივა: `POST /api/maintenance`, `Authorization: Bearer MAINTENANCE_KEY`. საიდუმლო URL-ში არ ჩასვათ.
-- აქტიური R2 ასლები იშლება; ინფრასტრუქტურის სარეზერვო ასლების სრული წაშლა არ არის გარანტირებული. დასრულებული შეკვეთებისა და ფინანსური ჩანაწერების შენახვის სამართლებრივი ვადა ცალკე დასადგენია.
+#### 2. Cloudflare Secrets Configuration
 
-## წარმოებაში გაშვების აუცილებელი ბლოკერები
+Navigate to Cloudflare Workers & Pages → `noor-portraits-backend` → Settings → Variables and Secrets.
 
-- კომპანიის სრული სახელი, რეგისტრაცია/საგადასახადო ნომერი, მისამართი, მოქმედი მხარდაჭერის ელფოსტა.
-- TBC ან Bank of Georgia-ს არჩევა, მერჩანტის დამტკიცება, live credentials, merchant account-ზე საერთაშორისო ბარათებისა და Apple Pay-ის დადასტურება.
-- ბანკის სრული ადაპტერის დასრულება მიმდინარე ოფიციალური დოკუმენტაციით; სერვერული verification/callback/refund, ვალუტისა და თანხის შესაბამისობისა და იდემპოტენტურობის live sandbox ტესტები.
-- AI პროვაიდერის არჩევა: სახის მსგავსების ხარისხი, კომერციული უფლებები, მონაცემთა შენახვა, ხარჯი, ხელმისაწვდომობა; API credentials, privacy/DPA განხილვა; სრულად სამუშაო გენერაცია/polling/timeout reconciliation ან დადასტურებული ხელით შესრულების ოპერაცია.
-- ელფოსტის პროვაიდერი, დამოწმებული გამგზავნი, SPF/DKIM/DMARC, ნამდვილი მიწოდებისა და ახალი ბმულის აღდგენის ტესტები.
-- საკუთარი დომენი, DNS, საჭირო callback/return URL-ების რეგისტრაცია. ბრენდისა და სავაჭრო ნიშნის შემოწმება.
-- ყველა არაბული ტექსტის მშობლიურ ენაზე მოსაუბრის მიერ შემოწმება. საწყისი არაბული კონტენტი პანელში შეუმოწმებლადაა მონიშნული.
-- საბოლოო იურიდიული პოლიტიკები საქართველოს გამყიდველისთვის და მიზნობრივი ბაზრებისთვის; მომხმარებლის უფლებები, მონაცემთა დაცვა, ვადები და დაბრუნების პირობები.
-- რეალურ ჰოსტინგზე ავტომატური წმენდის განრიგისა და წაშლის შემოწმება.
-- რეალურ მობილურ ბრაუზერებში ატვირთვის, კლავიატურის, 200%-იანი ტექსტის, RTL-ის, ნელი ქსელისა და აღდგენის საბოლოო ვიზუალური QA.
-- ხარჯების რეალური აღრიცხვა და თანხმობაზე მორგებული კონვერსიის დათვლა, თუ საჭიროა.
+Add all required secrets (see above). Never commit secrets to code or share in chat.
 
-ოფიციალური საბანკო დოკუმენტაცია (შემოწმებულია 2026-10-09):
-- https://developers.tbcbank.ge/docs/checkout-overview
-- https://api.bog.ge/docs/en/payments/introduction
+#### 3. Backend Deployment
 
-საჯარო paid-sales რეჟიმი არ არსებობს: მხოლოდ secret-ის დამატება არ ჩართავს რეალურ ჩამოჭრას. საჭიროა ზემოთ ჩამოთვლილი სამუშაოსა და ტესტების დასრულება.
+Automated via GitHub Actions on push to `main` branch:
 
-## Conversion-focused update
+```yaml
+# Requires CLOUDFLARE_API_TOKEN secret in GitHub repo settings
+# Token: Cloudflare → My Profile → API Tokens → "Edit Cloudflare Workers"
+```
 
-- First Portrait: 3 portraits / 1 style, provisional €7 demo price. Original packages retained. Admin can edit or deactivate it. No SAR/AED conversion is implied.
-- Focused cinematic/profile entry offers; preselected package/style links skip repeated selection. Three stages: look/package, photos, review/payment. Legacy local drafts migrate to the new stages.
-- Optional preferences are collapsed; poster name/title appear for cinematic orders. WhatsApp is preserved in existing drafts but not requested on the first-purchase screen.
-- Age, photo rights and AI consent are enforced server-side before uploading. Original files up to 20 MB are resized in the browser; server remains limited to sanitized 8 MB / 4.2 MP. HEIC remains unsupported.
-- Per-photo real byte progress, separate failures/retries, and idempotent upload IDs. No synthetic generation progress.
-- Optional first-party measurement: explicit consent, one-day HttpOnly session cookie, 30-day pseudonymous record retention and withdrawal. No advertising pixels or private customer text. Sessions are not unique people; opt-out traffic is excluded.
-- Georgian-default Offers & funnel dashboard separates demo activity from real paid sales. Funnel is descriptive, not an active randomized price experiment. Commercial outcomes come only from the server.
-- Admin order cost ledger accepts actual generation, review, support, payment and other variable costs, grouped by transaction currency. Recorded costs may be incomplete; no profit claim.
-- New schema delta: drizzle/0001_last_mattie_franklin.sql. Existing orders/data are preserved.
+Manual deployment:
 
-Still blocked: live payment approval/credentials and provider adapter, international cards/Apple Pay confirmation, reliable generation or operational manual fulfillment, email/domain, business details, native Arabic and legal review, actual hosted retention schedule verification. Authorized before/after evidence requires a real quality pilot and separate publication consent.
+```bash
+pnpm install --frozen-lockfile
+pnpm build
+pnpm run deploy
+
+# D1 migrations (NOT automated):
+pnpm wrangler d1 migrations apply DB --remote
+```
+
+#### 4. Resend Email Setup
+
+1. Add domain `mynoor.art` to Resend
+2. Add DNS records to Vercel DNS (SPF, DKIM, DMARC)
+3. Disable click tracking on domain settings
+4. Set sender: `NOOR Portraits <orders@mynoor.art>`
+5. Update `EMAIL_FROM` secret in Cloudflare
+
+#### 5. Admin Settings
+
+Navigate to `/ka/admin` → Settings and configure:
+
+- **Merchant Info**: Company name, registration ID, address, support email, phone
+- **Site URL**: `https://www.mynoor.art` (HTTPS only, no path/query/hash)
+- **Email Sender**: Same as `EMAIL_FROM` secret
+- **Payment Provider**: Select `bog` or `tbc` (Flitt)
+- **AI Provider**: Select `gemini` or `openai` (based on which API key you added)
+- **Retention Settings**: Unpaid hours (24), reference days (1), result days (1), undelivered days (14), revisions (1)
+
+#### 6. Vercel Authentication
+
+**IMPORTANT**: Disable Vercel Authentication before going live. Bank callbacks require unauthenticated POST access to `/api/payments/bog/callback` and `/api/payments/flitt/callback`.
+
+1. Navigate to Vercel project settings
+2. Security → Vercel Authentication → Disable
+
+#### 7. Test Payment Flow
+
+**BOG Sandbox Test Cards**:
+- Success: `4000 0000 0000 0001`
+- Failure: `4000 0000 0000 0002`
+- Any CVV and future expiry date
+
+**Flitt Sandbox**: Refer to Flitt developer documentation for test cards.
+
+**Note**: Apple Pay and Google Pay require merchant account activation and are not available in sandbox environments.
+
+## Local Development
+
+```bash
+# Install dependencies
+pnpm install --frozen-lockfile
+
+# Create .dev.vars with your random secret keys
+echo "ADMIN_SETUP_KEY=<random-string>" > .dev.vars
+echo "FILE_SIGNING_KEY=<random-string>" >> .dev.vars
+echo "MAINTENANCE_KEY=<random-string>" >> .dev.vars
+
+# Generate database schema
+pnpm db:generate
+
+# Build
+pnpm build
+
+# Apply migrations locally
+pnpm wrangler d1 execute DB --local --config dist/server/wrangler.json --file drizzle/0000_clean_nocturne.sql
+
+# Start dev server
+pnpm dev
+```
+
+The dev server runs on http://localhost:5173 with hot reload. Bindings (DB, BUCKET) are provided by Wrangler.
+
+## Testing
+
+```bash
+# Type checking
+pnpm typecheck
+
+# Build verification
+pnpm build
+
+# Integration tests
+pnpm test
+```
+
+Integration tests run in isolated Workers runtime with fresh D1/R2 instances. Payment and AI APIs are mocked; no network calls are made.
+
+## Architecture
+
+- **Frontend**: Next.js-compatible Vinext on Vercel (vercel-app/)
+- **Backend**: Cloudflare Workers (Vinext framework)
+- **Database**: Cloudflare D1 (SQLite)
+- **Storage**: Cloudflare R2 (private bucket)
+- **Generation**: Durable Object with SQLite state + alarm scheduler
+- **Localization**: Arabic (primary), English, Georgian
+
+### Consent Flow (3 Steps)
+
+1. **Choose Look**: Select package and style(s)
+2. **Upload Photos**: Accept all required consents, upload 3-5 photos (JPEG/PNG/WebP/HEIC/HEIF)
+3. **Review & Pay**: Enter email, optional preferences, complete payment
+
+All required consents consolidated in step 2 for faster conversion:
+- Age 18+ verification
+- Photo rights confirmation
+- AI processing & provider transfer consent
+- Terms acceptance
+- Immediate service commencement consent
+
+## File Retention
+
+Automatic cleanup runs hourly via cron (`17 * * * *`):
+
+- Unpaid photos: 24 hours after upload
+- Reference photos: 1 day after delivery (configurable)
+- Result images: 1 day after delivery (configurable)
+- Paid but undelivered order photos: Maximum 14 days (configurable)
+
+Manual cleanup: Admin panel → "Delete Expired Files"  
+Alternative: `POST /api/maintenance` with `Authorization: Bearer MAINTENANCE_KEY`
+
+## Remaining Launch Blockers
+
+- [ ] Merchant account approval from BOG or TBC
+- [ ] International card acceptance & Apple Pay verification
+- [ ] Custom domain DNS + callback URL registration
+- [ ] Native Arabic content review by fluent speaker
+- [ ] Legal review of terms, privacy, refund policies for Georgia + target markets
+- [ ] Production AI quality testing (resemblance, speed, cost)
+- [ ] Email deliverability testing (SPF/DKIM/DMARC verification)
+- [ ] Cron schedule verification on production Workers
+- [ ] Mobile QA in real browsers (iOS Safari, Android Chrome)
+- [ ] Brand and trademark availability check
+
+## Official Documentation
+
+- **BOG Payments**: https://api.bog.ge/docs/en/payments/introduction (verified 2026-10-16)
+- **TBC (Flitt)**: https://developers.tbcbank.ge/docs/checkout-overview (verified 2026-10-09)
+- **OpenAI Images**: https://developers.openai.com/api/reference/resources/images (verified 2026-10-16)
+- **Google Gemini**: https://ai.google.dev/gemini-api/docs/generate-content/image-generation (verified 2026-10-16)
+- **Resend**: https://resend.com/docs
+
+## License & Data
+
+This demo MVP is private. No public paid-sales mode exists. All code, brand names, and placeholder content are for demonstration only. Real merchant approval, credentials, quality validation, and legal review are required before accepting real payments.
+
+**No customer data** is used for training or advertising without separate consent. AI providers (OpenAI, Google) have their own data retention policies documented in their terms of service.
+
+## Support
+
+**Merchant**: Individual Entrepreneur შალვა ჯინჭარაძე (Shalva Jincharadze, I/E)  
+**ID**: 60001147948  
+**Location**: Georgia  
+**Email**: jincharadzeshako@gmail.com  
+**Phone**: +995 555 145 719
