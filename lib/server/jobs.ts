@@ -92,69 +92,41 @@ async function generateOrder(orderId: string, jobId: string, deadline: number, p
   }
   if (!references.length) throw Error('noReferences');
 
-  // Generate portraits in parallel with concurrency limit
-  const tasks: Array<{index: number; style: string; promise: Promise<void>}> = [];
-  
+  // Await each bounded batch before reading its persisted output count. Probing a
+  // promise with an already-resolved Promise.race cannot detect completion and
+  // can starve the remaining response bodies in a Durable Object.
   while (true) {
     const done = (await one('SELECT COUNT(*) AS n FROM generated_assets WHERE order_id=? AND approved=0', orderId)).n as number;
     if (done >= count) break;
-    if (deadline - Date.now() < START_MARGIN) {
-      // Wait for running tasks to complete before returning
-      await Promise.allSettled(tasks.map(t => t.promise));
-      return false;
-    }
-    
-    // Fill up to parallel limit
-    while (tasks.length < PARALLEL_LIMIT && done + tasks.length < count) {
-      const index = done + tasks.length;
+    if (deadline - Date.now() < START_MARGIN) return false;
+    const job = await one('SELECT status,attempts FROM generation_jobs WHERE id=?', jobId);
+    if (job?.status === 'failed') return true;
+    // Reserve the remaining failure budget before starting chargeable calls.
+    const batchSize = Math.min(PARALLEL_LIMIT, count - done, MAX_FAILURES - (job?.attempts || 0));
+    if (batchSize <= 0) return true;
+    const results = await Promise.allSettled(Array.from({length: batchSize}, async (_, offset) => {
+      const index = done + offset;
       const style = styles[index % styles.length];
-      
-      const task = (async () => {
-        try {
-          const prompt = buildPrompt({style, index: Math.floor(index / styles.length), preferences, revisionReason: reason});
-          const out = provider === 'openai'
-            ? await generatePortraitOpenAI({references, prompt, timeoutMs: IMAGE_TIMEOUT, user: 'order-' + orderId.slice(0, 8)})
-            : await generatePortrait({references, prompt, timeoutMs: IMAGE_TIMEOUT});
-          await storeResult(orderId, count, out.bytes, out.mimeType);
-          await run('UPDATE generation_jobs SET updated_at=? WHERE id=?', Date.now(), jobId);
-        } catch (e: any) {
-          if (e instanceof GenerationRejected || /^ai_error_|^Timeout|abort/i.test(String(e?.name) + String(e?.message))) {
-            await recordFailure(jobId, orderId, e, true);
-            const job = await one('SELECT status FROM generation_jobs WHERE id=?', jobId);
-            if (job?.status === 'failed') throw new Error('job_failed');
-          } else {
-            throw e;
-          }
-        }
-      })();
-      
-      tasks.push({index, style, promise: task});
-    }
-    
-    // Wait for at least one task to complete
-    if (tasks.length > 0) {
-      await Promise.race(tasks.map(t => t.promise.catch(() => {})));
-      
-      // Remove completed tasks
-      const pending = [];
-      for (const task of tasks) {
-        const result = await Promise.race([
-          task.promise.then(() => 'done'),
-          Promise.resolve('pending')
-        ]);
-        if (result === 'pending') pending.push(task);
+      const prompt = buildPrompt({style, index: Math.floor(index / styles.length), preferences, revisionReason: reason});
+      const out = provider === 'openai'
+        ? await generatePortraitOpenAI({references, prompt, timeoutMs: IMAGE_TIMEOUT, user: 'order-' + orderId.slice(0, 8)})
+        : await generatePortrait({references, prompt, timeoutMs: IMAGE_TIMEOUT});
+      await storeResult(orderId, count, out.bytes, out.mimeType);
+      await run('UPDATE generation_jobs SET updated_at=? WHERE id=?', Date.now(), jobId);
+    }));
+    let unexpected: unknown;
+    for (const result of results) {
+      if (result.status === 'fulfilled') continue;
+      const e = result.reason;
+      if (e instanceof GenerationRejected || /^ai_error_|^Timeout|abort/i.test(String(e?.name) + String(e?.message))) {
+        await recordFailure(jobId, orderId, e, true);
+      } else {
+        unexpected ??= e;
       }
-      tasks.length = 0;
-      tasks.push(...pending);
-      
-      // Check if job has failed
-      const job = await one('SELECT status FROM generation_jobs WHERE id=?', jobId);
-      if (job?.status === 'failed') return true;
     }
+    if ((await one('SELECT status FROM generation_jobs WHERE id=?', jobId))?.status === 'failed') return true;
+    if (unexpected) throw unexpected;
   }
-  
-  // Wait for all remaining tasks
-  await Promise.allSettled(tasks.map(t => t.promise));
   await deliver(orderId, jobId, revision);
   return true;
 }
